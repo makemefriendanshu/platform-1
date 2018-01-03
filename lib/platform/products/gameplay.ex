@@ -19,5 +19,7 @@ defmodule Platform.Products.Gameplay do
     gameplay
     |> cast(attrs, [:game_id, :player_id, :player_score])
     |> validate_required([:game_id, :player_id, :player_score])
+    |> foreign_key_constraint(:game_id)
+    |> foreign_key_constraint(:player_id)
   end
 end
