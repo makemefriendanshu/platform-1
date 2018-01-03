@@ -39,11 +39,23 @@ main =
 -- MODEL
 
 
+type Direction
+    = Left
+    | Right
+
+
 type GameState
     = StartScreen
     | Playing
     | Success
     | GameOver
+
+
+type alias Gameplay =
+    { gameId : Int
+    , playerId : Int
+    , playerScore : Int
+    }
 
 
 type alias Player =
@@ -55,36 +67,38 @@ type alias Player =
 
 
 type alias Model =
-    { errors : String
-    , gameId : Int
-    , gameState : GameState
+    { characterDirection : Direction
     , characterPositionX : Int
     , characterPositionY : Int
+    , errors : String
+    , gameId : Int
+    , gameplays : List Gameplay
+    , gameState : GameState
     , itemPositionX : Int
     , itemPositionY : Int
     , itemsCollected : Int
     , phxSocket : Phoenix.Socket.Socket Msg
     , playersList : List Player
     , playerScore : Int
-    , playerScores : List Score
     , timeRemaining : Int
     }
 
 
 initialModel : Flags -> Model
 initialModel flags =
-    { errors = ""
-    , gameId = 1
-    , gameState = StartScreen
+    { characterDirection = Right
     , characterPositionX = 50
     , characterPositionY = 300
+    , errors = ""
+    , gameId = 1
+    , gameplays = []
+    , gameState = StartScreen
     , itemPositionX = 150
     , itemPositionY = 300
     , itemsCollected = 0
     , phxSocket = initialSocketJoin flags
     , playersList = []
     , playerScore = 0
-    , playerScores = []
     , timeRemaining = 10
     }
 
@@ -98,9 +112,9 @@ initialSocket flags =
         prodSocketServer =
             "wss://elixir-elm-tutorial.herokuapp.com/socket/websocket?token=" ++ flags.token
     in
-        Phoenix.Socket.init prodSocketServer
+        Phoenix.Socket.init devSocketServer
             |> Phoenix.Socket.withDebug
-            |> Phoenix.Socket.on "shout" "score:platformer" SendScore
+            |> Phoenix.Socket.on "save_score" "score:platformer" SaveScore
             |> Phoenix.Socket.on "save_score" "score:platformer" ReceiveScoreChanges
             |> Phoenix.Socket.join initialChannel
 
@@ -182,9 +196,6 @@ type Msg
     | SaveScore Encode.Value
     | SaveScoreError Encode.Value
     | SaveScoreRequest
-    | SendScore Encode.Value
-    | SendScoreError Encode.Value
-    | SendScoreRequest
     | SetNewItemPositionX Int
     | TimeUpdate Time
 
@@ -214,10 +225,11 @@ update msg model =
                 32 ->
                     if model.gameState /= Playing then
                         ( { model
-                            | gameState = Playing
+                            | characterDirection = Right
                             , characterPositionX = 50
-                            , playerScore = 0
                             , itemsCollected = 0
+                            , gameState = Playing
+                            , playerScore = 0
                             , timeRemaining = 10
                           }
                         , Cmd.none
@@ -227,13 +239,23 @@ update msg model =
 
                 37 ->
                     if model.gameState == Playing then
-                        ( { model | characterPositionX = model.characterPositionX - 15 }, Cmd.none )
+                        ( { model
+                            | characterDirection = Left
+                            , characterPositionX = model.characterPositionX - 15
+                          }
+                        , Cmd.none
+                        )
                     else
                         ( model, Cmd.none )
 
                 39 ->
                     if model.gameState == Playing then
-                        ( { model | characterPositionX = model.characterPositionX + 15 }, Cmd.none )
+                        ( { model
+                            | characterDirection = Right
+                            , characterPositionX = model.characterPositionX + 15
+                          }
+                        , Cmd.none
+                        )
                     else
                         ( model, Cmd.none )
 
@@ -252,7 +274,7 @@ update msg model =
         ReceiveScoreChanges raw ->
             case Decode.decodeValue scoreDecoder raw of
                 Ok scoreChange ->
-                    ( { model | playerScores = scoreChange :: model.playerScores }, Cmd.none )
+                    ( { model | gameplays = scoreChange :: model.gameplays }, Cmd.none )
 
                 Err message ->
                     ( { model | errors = message }, Cmd.none )
@@ -261,7 +283,7 @@ update msg model =
             ( model, Cmd.none )
 
         SaveScoreError message ->
-            Debug.log "Error saveing score over socket."
+            Debug.log "Error saving score over socket."
                 ( model, Cmd.none )
 
         SaveScoreRequest ->
@@ -274,31 +296,6 @@ update msg model =
                         |> Phoenix.Push.withPayload payload
                         |> Phoenix.Push.onOk SaveScore
                         |> Phoenix.Push.onError SaveScoreError
-
-                ( phxSocket, phxCmd ) =
-                    Phoenix.Socket.push phxPush model.phxSocket
-            in
-                ( { model | phxSocket = phxSocket }
-                , Cmd.map PhoenixMsg phxCmd
-                )
-
-        SendScore value ->
-            ( model, Cmd.none )
-
-        SendScoreError message ->
-            Debug.log "Error sending score over socket."
-                ( model, Cmd.none )
-
-        SendScoreRequest ->
-            let
-                payload =
-                    Encode.object [ ( "player_score", Encode.int model.playerScore ) ]
-
-                phxPush =
-                    Phoenix.Push.init "shout" "score:platformer"
-                        |> Phoenix.Push.withPayload payload
-                        |> Phoenix.Push.onOk SendScore
-                        |> Phoenix.Push.onError SendScoreError
 
                 ( phxSocket, phxCmd ) =
                     Phoenix.Socket.push phxPush model.phxSocket
@@ -363,20 +360,8 @@ view : Model -> Html Msg
 view model =
     div []
         [ viewGame model
-        , viewSendScoreButton
         , viewSaveScoreButton
-        , viewPlayerScoresIndex model
-        ]
-
-
-viewSendScoreButton : Html Msg
-viewSendScoreButton =
-    div []
-        [ button
-            [ onClick SendScoreRequest
-            , Html.Attributes.class "btn btn-primary"
-            ]
-            [ text "Send Score" ]
+        , viewGameplaysIndex model
         ]
 
 
@@ -391,21 +376,21 @@ viewSaveScoreButton =
         ]
 
 
-viewPlayerScoresIndex : Model -> Html Msg
-viewPlayerScoresIndex model =
-    if List.isEmpty model.playerScores then
+viewGameplaysIndex : Model -> Html Msg
+viewGameplaysIndex model =
+    if List.isEmpty model.gameplays then
         div [] []
     else
         div [ Html.Attributes.class "players-index" ]
             [ h1 [ Html.Attributes.class "players-section" ] [ text "Player Scores" ]
-            , viewPlayerScoresList model.playerScores
+            , viewPlayerScoresList model.gameplays
             ]
 
 
 viewPlayerScoresList : List Score -> Html Msg
 viewPlayerScoresList scores =
     div [ Html.Attributes.class "players-list panel panel-info" ]
-        [ div [ Html.Attributes.class "panel-heading" ] [ text "Leaderboard" ]
+        [ div [ Html.Attributes.class "panel-heading" ] [ text "Scores" ]
         , ul [ Html.Attributes.class "list-group" ] (List.map viewPlayerScoreItem scores)
         ]
 
@@ -527,14 +512,23 @@ viewGameGround =
 
 viewCharacter : Model -> Svg Msg
 viewCharacter model =
-    image
-        [ xlinkHref "/images/character.gif"
-        , x (toString model.characterPositionX)
-        , y (toString model.characterPositionY)
-        , width "50"
-        , height "50"
-        ]
-        []
+    let
+        characterImage =
+            case model.characterDirection of
+                Left ->
+                    "/images/character-left.gif"
+
+                Right ->
+                    "/images/character-right.gif"
+    in
+        image
+            [ xlinkHref characterImage
+            , x (toString model.characterPositionX)
+            , y (toString model.characterPositionY)
+            , width "50"
+            , height "50"
+            ]
+            []
 
 
 viewItem : Model -> Svg Msg
