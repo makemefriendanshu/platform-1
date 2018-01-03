@@ -140,7 +140,8 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     ( initialModel flags
     , Cmd.batch
-        [ fetchPlayersList
+        [ fetchGameplaysList
+        , fetchPlayersList
         , Cmd.map PhoenixMsg (initialSocketCommand flags)
         ]
     )
@@ -172,18 +173,24 @@ decodePlayer =
         (Decode.field "username" Decode.string)
 
 
-type alias Score =
-    { gameId : Int
-    , playerId : Int
-    , playerScore : Int
-    }
+fetchGameplaysList : Cmd Msg
+fetchGameplaysList =
+    Http.get "/api/gameplays" decodeGameplaysList
+        |> Http.send FetchGameplaysList
 
 
-scoreDecoder : Decode.Decoder Score
-scoreDecoder =
-    Decode.map3 Score
-        (Decode.field "game_id" Decode.int)
-        (Decode.field "player_id" Decode.int)
+decodeGameplaysList : Decode.Decoder (List Gameplay)
+decodeGameplaysList =
+    decodeGameplay
+        |> Decode.list
+        |> Decode.at [ "data" ]
+
+
+decodeGameplay : Decode.Decoder Gameplay
+decodeGameplay =
+    Decode.map3 Gameplay
+        (Decode.field "id" Decode.int)
+        (Decode.field "id" Decode.int)
         (Decode.field "player_score" Decode.int)
 
 
@@ -194,6 +201,7 @@ scoreDecoder =
 type Msg
     = NoOp
     | CountdownTimer Time
+    | FetchGameplaysList (Result Http.Error (List Gameplay))
     | FetchPlayersList (Result Http.Error (List Player))
     | KeyDown KeyCode
     | PhoenixMsg (Phoenix.Socket.Msg Msg)
@@ -216,6 +224,14 @@ update msg model =
                 ( { model | timeRemaining = model.timeRemaining - 1 }, Cmd.none )
             else
                 ( model, Cmd.none )
+
+        FetchGameplaysList result ->
+            case result of
+                Ok gameplays ->
+                    ( { model | gameplays = gameplays }, Cmd.none )
+
+                Err message ->
+                    ( { model | errors = toString message }, Cmd.none )
 
         FetchPlayersList result ->
             case result of
@@ -277,7 +293,7 @@ update msg model =
                 )
 
         ReceiveScoreChanges raw ->
-            case Decode.decodeValue scoreDecoder raw of
+            case Decode.decodeValue decodeGameplay raw of
                 Ok scoreChange ->
                     ( { model | gameplays = scoreChange :: model.gameplays }, Cmd.none )
 
