@@ -6,6 +6,7 @@ defmodule Platform.Products do
   import Ecto.Query, warn: false
   alias Platform.Repo
 
+  alias Platform.Accounts
   alias Platform.Products.Game
   alias Platform.Products.Gameplay
 
@@ -38,11 +39,6 @@ defmodule Platform.Products do
   """
   def get_game!(id), do: Repo.get!(Game, id)
   def get_game_by_slug!(slug), do: Repo.get_by!(Game, slug: slug)
-
-  def get_gameplays_by_id!(id) do
-    query = from gp in "gameplays", where: gp.game_id == ^id, select: [:player_id, :player_score]
-    Repo.all(query)
-  end
 
   @doc """
   Creates a game.
@@ -110,8 +106,6 @@ defmodule Platform.Products do
     Game.changeset(game, %{})
   end
 
-  alias Platform.Products.Gameplay
-
   @doc """
   Returns the list of gameplays.
 
@@ -140,6 +134,10 @@ defmodule Platform.Products do
 
   """
   def get_gameplay!(id), do: Repo.get!(Gameplay, id)
+  def get_gameplays_by_id!(id) do
+    query = from gp in "gameplays", where: gp.game_id == ^id, select: [:player_id, :player_score]
+    Repo.all(query)
+  end
 
   @doc """
   Creates a gameplay.
@@ -154,6 +152,11 @@ defmodule Platform.Products do
 
   """
   def create_gameplay(attrs \\ %{}) do
+    # Update player total score.
+    player = Accounts.get_player!(attrs[:player_id])
+    Accounts.update_player(player, %{score: player.score + attrs[:player_score]})
+
+    # Create gameplay record.
     %Gameplay{}
     |> Gameplay.changeset(attrs)
     |> Repo.insert()
