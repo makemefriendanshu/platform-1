@@ -138,7 +138,12 @@ initialSocketCommand flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( initialModel flags, Cmd.map PhoenixMsg (initialSocketCommand flags) )
+    ( initialModel flags
+    , Cmd.batch
+        [ fetchPlayersList
+        , Cmd.map PhoenixMsg (initialSocketCommand flags)
+        ]
+    )
 
 
 
@@ -383,24 +388,58 @@ viewGameplaysIndex model =
     else
         div [ Html.Attributes.class "players-index" ]
             [ h1 [ Html.Attributes.class "players-section" ] [ text "Player Scores" ]
-            , viewPlayerScoresList model.gameplays
+            , viewGameplaysList model
             ]
 
 
-viewPlayerScoresList : List Score -> Html Msg
-viewPlayerScoresList scores =
+viewGameplaysList : Model -> Html Msg
+viewGameplaysList model =
     div [ Html.Attributes.class "players-list panel panel-info" ]
         [ div [ Html.Attributes.class "panel-heading" ] [ text "Scores" ]
-        , ul [ Html.Attributes.class "list-group" ] (List.map viewPlayerScoreItem scores)
+        , ul [ Html.Attributes.class "list-group" ] (List.map (viewPlayerScoreItem model) model.gameplays)
         ]
 
 
-viewPlayerScoreItem : Score -> Html Msg
-viewPlayerScoreItem score =
-    li [ Html.Attributes.class "player-item list-group-item" ]
-        [ strong [] [ text (toString score.playerId) ]
-        , span [ Html.Attributes.class "badge" ] [ text (toString score.playerScore) ]
-        ]
+anonymousPlayer : Player
+anonymousPlayer =
+    { displayName = Just "Anonymous User"
+    , id = 0
+    , score = 0
+    , username = "anonymous"
+    }
+
+
+viewPlayerScoreItem : Model -> Gameplay -> Html Msg
+viewPlayerScoreItem model gameplay =
+    let
+        currentPlayer =
+            model.playersList
+                |> List.filter (\player -> player.id == gameplay.playerId)
+                |> List.head
+                |> Maybe.withDefault anonymousPlayer
+
+        displayName =
+            Maybe.withDefault currentPlayer.username currentPlayer.displayName
+    in
+        li [ Html.Attributes.class "player-item list-group-item" ]
+            [ strong [] [ text displayName ]
+            , span [ Html.Attributes.class "badge" ] [ text (toString gameplay.playerScore) ]
+            ]
+
+
+playersListItem : Player -> Html msg
+playersListItem player =
+    let
+        displayName =
+            if player.displayName == Nothing then
+                player.username
+            else
+                Maybe.withDefault "" player.displayName
+    in
+        li [ Html.Attributes.class "player-item list-group-item" ]
+            [ strong [] [ text displayName ]
+            , span [ Html.Attributes.class "badge" ] [ text (toString player.score) ]
+            ]
 
 
 viewGame : Model -> Svg Msg

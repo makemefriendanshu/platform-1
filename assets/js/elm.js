@@ -16413,7 +16413,8 @@ var _user$project$Platformer$viewGame = function (model) {
 		},
 		_user$project$Platformer$viewGameState(model));
 };
-var _user$project$Platformer$viewPlayerScoreItem = function (score) {
+var _user$project$Platformer$playersListItem = function (player) {
+	var displayName = _elm_lang$core$Native_Utils.eq(player.displayName, _elm_lang$core$Maybe$Nothing) ? player.username : A2(_elm_lang$core$Maybe$withDefault, '', player.displayName);
 	return A2(
 		_elm_lang$html$Html$li,
 		{
@@ -16428,8 +16429,7 @@ var _user$project$Platformer$viewPlayerScoreItem = function (score) {
 				{ctor: '[]'},
 				{
 					ctor: '::',
-					_0: _elm_lang$svg$Svg$text(
-						_elm_lang$core$Basics$toString(score.playerId)),
+					_0: _elm_lang$svg$Svg$text(displayName),
 					_1: {ctor: '[]'}
 				}),
 			_1: {
@@ -16444,14 +16444,69 @@ var _user$project$Platformer$viewPlayerScoreItem = function (score) {
 					{
 						ctor: '::',
 						_0: _elm_lang$svg$Svg$text(
-							_elm_lang$core$Basics$toString(score.playerScore)),
+							_elm_lang$core$Basics$toString(player.score)),
 						_1: {ctor: '[]'}
 					}),
 				_1: {ctor: '[]'}
 			}
 		});
 };
-var _user$project$Platformer$viewPlayerScoresList = function (scores) {
+var _user$project$Platformer$anonymousPlayer = {
+	displayName: _elm_lang$core$Maybe$Just('Anonymous User'),
+	id: 0,
+	score: 0,
+	username: 'anonymous'
+};
+var _user$project$Platformer$viewPlayerScoreItem = F2(
+	function (model, gameplay) {
+		var currentPlayer = A2(
+			_elm_lang$core$Maybe$withDefault,
+			_user$project$Platformer$anonymousPlayer,
+			_elm_lang$core$List$head(
+				A2(
+					_elm_lang$core$List$filter,
+					function (player) {
+						return _elm_lang$core$Native_Utils.eq(player.id, gameplay.playerId);
+					},
+					model.playersList)));
+		var displayName = A2(_elm_lang$core$Maybe$withDefault, currentPlayer.username, currentPlayer.displayName);
+		return A2(
+			_elm_lang$html$Html$li,
+			{
+				ctor: '::',
+				_0: _elm_lang$html$Html_Attributes$class('player-item list-group-item'),
+				_1: {ctor: '[]'}
+			},
+			{
+				ctor: '::',
+				_0: A2(
+					_elm_lang$html$Html$strong,
+					{ctor: '[]'},
+					{
+						ctor: '::',
+						_0: _elm_lang$svg$Svg$text(displayName),
+						_1: {ctor: '[]'}
+					}),
+				_1: {
+					ctor: '::',
+					_0: A2(
+						_elm_lang$html$Html$span,
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html_Attributes$class('badge'),
+							_1: {ctor: '[]'}
+						},
+						{
+							ctor: '::',
+							_0: _elm_lang$svg$Svg$text(
+								_elm_lang$core$Basics$toString(gameplay.playerScore)),
+							_1: {ctor: '[]'}
+						}),
+					_1: {ctor: '[]'}
+				}
+			});
+	});
+var _user$project$Platformer$viewGameplaysList = function (model) {
 	return A2(
 		_elm_lang$html$Html$div,
 		{
@@ -16482,7 +16537,10 @@ var _user$project$Platformer$viewPlayerScoresList = function (scores) {
 						_0: _elm_lang$html$Html_Attributes$class('list-group'),
 						_1: {ctor: '[]'}
 					},
-					A2(_elm_lang$core$List$map, _user$project$Platformer$viewPlayerScoreItem, scores)),
+					A2(
+						_elm_lang$core$List$map,
+						_user$project$Platformer$viewPlayerScoreItem(model),
+						model.gameplays)),
 				_1: {ctor: '[]'}
 			}
 		});
@@ -16514,7 +16572,7 @@ var _user$project$Platformer$viewGameplaysIndex = function (model) {
 				}),
 			_1: {
 				ctor: '::',
-				_0: _user$project$Platformer$viewPlayerScoresList(model.gameplays),
+				_0: _user$project$Platformer$viewGameplaysList(model),
 				_1: {ctor: '[]'}
 			}
 		});
@@ -16703,16 +16761,6 @@ var _user$project$Platformer$initialSocketCommand = function (flags) {
 var _user$project$Platformer$PhoenixMsg = function (a) {
 	return {ctor: 'PhoenixMsg', _0: a};
 };
-var _user$project$Platformer$init = function (flags) {
-	return {
-		ctor: '_Tuple2',
-		_0: _user$project$Platformer$initialModel(flags),
-		_1: A2(
-			_elm_lang$core$Platform_Cmd$map,
-			_user$project$Platformer$PhoenixMsg,
-			_user$project$Platformer$initialSocketCommand(flags))
-	};
-};
 var _user$project$Platformer$update = F2(
 	function (msg, model) {
 		var _p2 = msg;
@@ -16891,6 +16939,25 @@ var _user$project$Platformer$fetchPlayersList = A2(
 	_elm_lang$http$Http$send,
 	_user$project$Platformer$FetchPlayersList,
 	A2(_elm_lang$http$Http$get, '/api/players', _user$project$Platformer$decodePlayersList));
+var _user$project$Platformer$init = function (flags) {
+	return {
+		ctor: '_Tuple2',
+		_0: _user$project$Platformer$initialModel(flags),
+		_1: _elm_lang$core$Platform_Cmd$batch(
+			{
+				ctor: '::',
+				_0: _user$project$Platformer$fetchPlayersList,
+				_1: {
+					ctor: '::',
+					_0: A2(
+						_elm_lang$core$Platform_Cmd$map,
+						_user$project$Platformer$PhoenixMsg,
+						_user$project$Platformer$initialSocketCommand(flags)),
+					_1: {ctor: '[]'}
+				}
+			})
+	};
+};
 var _user$project$Platformer$CountdownTimer = function (a) {
 	return {ctor: 'CountdownTimer', _0: a};
 };
